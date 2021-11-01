@@ -1,12 +1,52 @@
+'use strict'
+
+const util = require('util');
+const EventEmitter = require('events');
+const ee = new EventEmitter();
+
+const average = (arr) => {
+    let sum = 0;
+    for (const value of arr) {
+        if (typeof value !== 'number') throw new TypeError('array should contain only numbers');
+        sum += value;
+    }
+    return Math.floor(sum / arr.length)
+}
+
 const queue = () => {
+    const stackTime = [];
+    const stats = {
+        elapsedTime: new Date().getTime(),
+        processed: 0,
+        processing: 0,
+        minTime: 0,
+        maxTime: 0,
+        averageTime: 0,
+    }
+    ee.on('put', () => {
+        stats.processing++;
+        stackTime.push(new Date().getTime());
+    });
+    ee.on('pick', () => {
+        stats.processed++;
+        stats.processing--;
+        let elemTime = stackTime.shift();
+        elemTime = new Date().getTime() - elemTime;
+        if (stats.minTime === 0) stats.minTime = elemTime;
+        if (stats.maxTime === 0) stats.maxTime = elemTime;
+        stats.minTime = (elemTime < stats.minTime) ? elemTime : stats.minTime;
+        stats.maxTime = (elemTime > stats.maxTime) ? elemTime : stats.minTime;
+        stackTime.push(elemTime);
+        stats.averageTime = average(stackTime);
+    });
+    ee.on('print', () => stats.elapsedTime = new Date().getTime() - stats.elapsedTime);
     let first;
     let last;
     let msec = null;
     let delay = 0;
-    let delayForPick = 0;
     let wait = false;
     return {
-        put(item, priority) {
+        put(item, priority = 0) {
             if (!wait) {
                 if (msec) {
                     wait = true;
@@ -16,12 +56,10 @@ const queue = () => {
                 const element = { next: null, item, priority };
                 if (priority !== 0) {
                     let prev;
-                    let i = 0;
                     current = first;
                     while (priority >= current.priority && current.priority !== 0) {
                         prev = current;
                         current = current.next;
-                        i++;
                     }
                     element.next = current;
                     if (first.priority === 0) first = element;
@@ -36,6 +74,7 @@ const queue = () => {
                     last = element;
                 }
                 this.size++;
+                ee.emit('put')
             } else {
                 delay += msec;
                 setTimeout(() => {
@@ -44,47 +83,53 @@ const queue = () => {
                 }, delay);
             }
         },
-        pick() {
+        pick(cb) {
             const element = first;
             if (!element) return null;
             if (last === element) {
-              first = null;
-              last = null;
+                first = null;
+                last = null;
             } else {
-              first = element.next;
+                first = element.next;
             }
             this.size--;
-            return element.item;
-          
+            ee.emit('pick');
+            cb(element.item);
+
         },
         clear() {
-         last = null;
-         first = null;
-         this.size = 0;
+            last = null;
+            first = null;
+            this.size = 0;
         },
         clone() {
-         return Object.create(this)
+            return Object.create(this)
         },
         timeout(ms) {
             msec = ms;
-           wait = true;
+            wait = true;
+            return this;
         },
         size: 0,
         [Symbol.iterator]() {
-               return {
-                    first: first,
-                       next() {
-                        const first = this.first;
-                        if (first) this.first = this.first.next;
-                        return first ? {
-                            done: false,
-                            value: first.item
-                        } : {
-                            done: true,
-                            value: null
-                        }
+            return {
+                first: first,
+                next() {
+                    const first = this.first;
+                    if (first) this.first = this.first.next;
+                    return first ? {
+                        done: false,
+                        value: first.item
+                    } : {
+                        done: true,
+                        value: null
                     }
                 }
+            }
+        },
+        [util.inspect.custom]() {
+            ee.emit('print');
+            return stats
         }
     }
 }
