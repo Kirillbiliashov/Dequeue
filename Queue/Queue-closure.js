@@ -28,14 +28,15 @@ const queue = () => {
         stackTime.push(new Date().getTime());
     });
     ee.on('pick', () => {
+        let { minTime, maxTime } = stats;
         stats.processed++;
         stats.processing--;
         let elemTime = stackTime.shift();
         elemTime = new Date().getTime() - elemTime;
-        if (stats.minTime === 0) stats.minTime = elemTime;
-        if (stats.maxTime === 0) stats.maxTime = elemTime;
-        stats.minTime = (elemTime < stats.minTime) ? elemTime : stats.minTime;
-        stats.maxTime = (elemTime > stats.maxTime) ? elemTime : stats.minTime;
+        if (minTime === 0) minTime = elemTime;
+        if (maxTime === 0) maxTime = elemTime;
+        stats.minTime = (elemTime < minTime) ? elemTime : minTime;
+        stats.maxTime = (elemTime > maxTime) ? elemTime : minTime;
         stackTime.push(elemTime);
         stats.averageTime = average(stackTime);
     });
@@ -133,3 +134,20 @@ const queue = () => {
         }
     }
 }
+
+const q = queue();  
+const obj1 = { name: 'first' };
+const obj2 = { name: 'second' };
+const obj3 = { name: 'third' };
+q.put(obj1);
+q.put(obj2);
+q.put(obj3);
+setTimeout(() =>  q.pick(console.log), 200 );
+setTimeout(() =>  q.pick(console.log), 400 );
+setTimeout(() =>  q.pick(console.log), 600 );
+
+setTimeout(() => {
+console.log(q);        
+}, 800)
+
+
